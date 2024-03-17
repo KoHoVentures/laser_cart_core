@@ -7,7 +7,7 @@ from sensor_msgs.msg import Imu
 
 # Declare variable of Imu type 
 my_imu_data = Imu()
-freq = 50
+freq = 2
 
 # Register
 power_mgmt_1 = 0x6b
