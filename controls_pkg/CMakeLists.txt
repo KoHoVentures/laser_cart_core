@@ -160,6 +160,7 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/marker_keyboard_node.py
   scripts/auto_command_position_node.py
+  scripts/points_manager_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
