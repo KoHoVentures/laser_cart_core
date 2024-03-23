@@ -8,6 +8,8 @@ import math
 
 class PointsManagerNode():
     def __init__(self):
+        
+        rospy.init_node('points_manager_node', anonymous=True)
 
         points_list = [[10, 20, 10], [50, 50, 20], [100, 30, 10]] # in mm
         points_threshold = 5
@@ -20,7 +22,6 @@ class PointsManagerNode():
 
         self.home_point = self.initPoint([0, 0, 0])
 
-        rospy.init_node('auto_command_position_node', anonymous=True)
         self.rate = rospy.Rate(10)  # 10hz
 
         # Create publishers
@@ -34,7 +35,7 @@ class PointsManagerNode():
 
         # Create subscriber
         stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
-        encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', Int64MultiArray, self.encoderCallback)
+        encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
 
     def interpolate_points(self, point1, point2, num_intermediate_points):
         interpolated_points = []
@@ -62,7 +63,7 @@ class PointsManagerNode():
         new_points.append(points_list[-1])  # Include last original point
         return new_points
     
-    def initPoint(given_point):
+    def initPoint(self, given_point):
         point_stamped_msg = PointStamped()
 
         point_stamped_msg.header = Header()
@@ -99,10 +100,10 @@ class PointsManagerNode():
                 
             self.rate.sleep()
 
-    def pointReached2D(cur_pos, goal_pos, point_threshold):
+    def pointReached2D(self, cur_pos, goal_pos, point_threshold):
 
-        x_diff = cur_pos.point.x - goal_pos[0]
-        y_diff = cur_pos.point.y - goal_pos[1]
+        x_diff = cur_pos.point.x - goal_pos.point.x
+        y_diff = cur_pos.point.y - goal_pos.point.y
 
         if(math.sqrt(x_diff**2 + y_diff**2) <= point_threshold):
             return True
@@ -127,9 +128,16 @@ class PointsManagerNode():
 
     def encoderCallback(self, msg):
         # Define your callback function
-        print("Encoder received, left: "+str(msg.data[0]) + ", right: "+str(msg.data[1]))
-        pass
-    
+        print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
+
+        wheel_radius = 0.15
+
+        theta_l = msg.point.x # hacky, should have been erray but debug taking too long
+        theta_r = msg.point.y # hacky, should have been erray but debug taking too long
+
+        d = (wheel_radius / 2) * (theta_r + theta_l)
+        theta = (wheel_radius / 2) * (theta_r - theta_l)
+        
 if __name__ == '__main__':
     try:
         node = PointsManagerNode()
