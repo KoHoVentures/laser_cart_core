@@ -1,0 +1,14 @@
+<launch>
+  <arg name="node_start_delay" default="5.0" />  
+
+  <!-- Run serial_node.py in a new terminal -->
+  <node pkg="rosserial_python" type="serial_node.py" name="serial_node" output="screen">
+    <param name="port" value="/dev/ttyACM0"/> <!-- Update port value as needed -->
+    <param name="baud" value="115200"/> <!-- Set the baud rate -->
+  </node>
+
+  <!-- Run marker_keyboard_node.py in a new terminal -->
+  <!-- <node pkg="controls_pkg" type="marker_keyboard_node.py" name="marker_keyboard_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/> -->
+  <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/>
+
+</launch>
