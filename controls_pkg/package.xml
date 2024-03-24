@@ -52,6 +52,8 @@
   <build_depend>sensor_msgs</build_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

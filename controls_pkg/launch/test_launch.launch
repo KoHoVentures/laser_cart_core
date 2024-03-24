@@ -6,6 +6,7 @@
   <arg name="steps_per_mm_arg" default="80"/>
   <arg name="wheel_radius_arg" default="0.01"/>
   <arg name="frame_base_length_arg" default="0.02"/>
+  <arg name="points_threshold_arg" default="0.005"/>
 
   <!-- Run serial_node.py in a new terminal -->
   <node pkg="rosserial_python" type="serial_node.py" name="serial_node" output="screen">
@@ -15,20 +16,18 @@
 
   <!-- Static transform UPDATEEEEE -->
   <node pkg="tf2_ros" type="static_transform_publisher" name="marker_home_broadcaster" args="1 0 0 0 0 0 1 base_link marker_home_link" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_static_broadcaster" args="0 0 0 0 0 0 1 world base_link" />
 
   <!-- Run marker_keyboard_node.py in a new terminal -->
   <!-- <node pkg="controls_pkg" type="marker_keyboard_node.py" name="marker_keyboard_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/> -->
   <!-- <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/> -->
   <node pkg="controls_pkg" type="points_manager_node.py" name="points_manager_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
-
-    <!-- Set parameters using arguments or defaults -->
     <param name="min_dist_to_transition" type="double" value="$(arg min_dist_to_transition_arg)"/>
     <param name="steps_per_mm" type="double" value="$(arg steps_per_mm_arg)"/>
     <param name="wheel_radius" type="double" value="$(arg wheel_radius_arg)"/>
     <param name="frame_base_length" type="double" value="$(arg frame_base_length_arg)"/>
+    <param name="points_threshold" type="double" value="$(arg points_threshold_arg)"/>
 
   </node>
-   <arg name="marker_size" doc="The size of the marker (in meters)" />
-
 
 </launch>

@@ -31,14 +31,21 @@ def main():
     rate = rospy.Rate(10)  # 10hz
 
     # Create publishers
-    marker_set_pos_publisher = rospy.Publisher('marker_position_topic', Point, queue_size=10)
+    marker_set_pos_publisher = rospy.Publisher('marker_position_topic', PointStamped, queue_size=10)
     marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
+    stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
+
+    enable_stepper_msg = Bool()
+    enable_stepper_msg.data = False
 
     tst_msg = Bool()
     tst_msg.data = True
 
+    # Enable stepper
+    stepper_enable_disable_publisher.publish(enable_stepper_msg)
+
     # Create subscriber
-    stepper_state_subscriber = rospy.Subscriber('cur_pos', Point, curPosCallback)
+    stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, curPosCallback)
 
     while not rospy.is_shutdown():
         # point = points_list[0]
@@ -52,14 +59,14 @@ def main():
 
 def curPosCallback(msg):
     steps_per_mm = 80 # TODO match with arduino
-    Asteps = msg.x
-    Bsteps = msg.y
+    Asteps = msg.point.x
+    Bsteps = msg.point.y
 
-    x = (Asteps + Bsteps) / (2 * steps_per_mm)
-    y = (Asteps - Bsteps) / (2 * steps_per_mm)
+    x = ((Asteps + Bsteps) / (2 * steps_per_mm)) / 1000.0
+    y = ((Asteps - Bsteps) / (2 * steps_per_mm)) / 1000.0
     z = 0.0 # TODO
 
-    print(str(x) + " " + str(y) + " " + str(z))
+    print("Current position: "+str(x) + " " + str(y) + " " + str(z))
 
 def stepper_callback(msg):
     # Define your callback function for stepper_enable_disable_topic subscriber

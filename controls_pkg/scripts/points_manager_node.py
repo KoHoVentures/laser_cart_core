@@ -19,14 +19,14 @@ class PointsManagerNode():
         self.steps_per_mm = rospy.get_param('~steps_per_mm', '80') # From arduino
         self.wheel_radius = rospy.get_param('~wheel_radius', '0.01')
         self.frame_base_length = rospy.get_param('~frame_base_length', '0.02')
+        self.points_threshold = rospy.get_param('~points_threshold', '0.001')
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.broadcaster = tf2_ros.TransformBroadcaster()
 
-        points_list = [[10, 20, 10], [50, 50, 20], [100, 30, 10]] # in mm
-        points_threshold = 5
-        points_list = self.populate_points_fixed_threshold(points_list, points_threshold)
+        points_list = [[0.01, 0.02, 0.01], [0.05, 0.05, 0.02], [0.1, 0.03, 0.01], [0.0, 0.0, 0.0]] # in m
+        # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
         
         self.points_list = []
 
@@ -40,15 +40,26 @@ class PointsManagerNode():
         # Create publishers
         self.marker_set_pos_publisher = rospy.Publisher('marker_position_topic', PointStamped, queue_size=10)
         self.marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
+        self.stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
 
         self.get_pos_msg = Bool()
+        self.enable_stepper_msg = Bool()
+    
         self.get_pos_msg.data = True
+        self.enable_stepper_msg.data = True
 
         self.cur_pos = PointStamped()
 
         # Create subscriber
         stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
         encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
+
+    def disable_steppers(self):
+
+        self.enable_stepper_msg.data = False
+        # Disable stepper
+        self.stepper_enable_disable_publisher.publish(self.enable_stepper_msg)
+        
 
     def interpolate_points(self, point1, point2, num_intermediate_points):
         interpolated_points = []
@@ -93,16 +104,20 @@ class PointsManagerNode():
 
         cur_ind = 0
 
+        # Enable stepper
+        self.stepper_enable_disable_publisher.publish(self.enable_stepper_msg)
+
         while not rospy.is_shutdown():
             goal_point = self.points_list[cur_ind]
             self.marker_set_pos_publisher.publish(goal_point) # TODO: publishes move at node freq so might wanna change this
-
+            # print("Goal point: "+str(goal_point))
             self.marker_get_pos_publisher.publish(self.get_pos_msg) # Populates self.cur_pos with the latest position
 
             pos_reached = self.pointReached2D(self.cur_pos, goal_point, self.min_dist_to_transition)
 
             if pos_reached:
                 cur_ind += 1
+                print("Moving to point number " + str(cur_ind + 1))
             
             if cur_ind >= len(self.points_list):
                 self.marker_set_pos_publisher.publish(self.home_point)
@@ -128,7 +143,7 @@ class PointsManagerNode():
         Bsteps = msg.point.y
 
         x = ((Asteps + Bsteps) / (2 * self.steps_per_mm)) / 1000.0
-        y = ((Asteps - Bsteps) / (2 * self.steps_per_mm) ) / 1000.0
+        y = ((Asteps - Bsteps) / (2 * self.steps_per_mm)) / 1000.0
         z = 0.0 # TODO
 
         print("Current position (in m): "+str(x) + " " + str(y) + " " + str(z))
@@ -140,7 +155,7 @@ class PointsManagerNode():
 
     def encoderCallback(self, msg):
         # Define your callback function
-        print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
+        # print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
 
         theta_l = msg.point.x # hacky, should have been erray but debug taking too long
         theta_r = msg.point.y # hacky, should have been erray but debug taking too long
@@ -148,35 +163,35 @@ class PointsManagerNode():
         delta_s = (self.wheel_radius / 2) * (theta_r + theta_l)
         delta_theta = (self.wheel_radius / self.frame_base_length) * (theta_r - theta_l)
 
-        transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time(0))
+        # transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time(0))
 
-        (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
-
-        transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
-        transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
-        transform.transform.translation.z += 0.0  # No change in Z
-
-        quaternion = [
-            transform.transform.rotation.x,
-            transform.transform.rotation.y,
-            transform.transform.rotation.z,
-            transform.transform.rotation.w
-        ]
+        # quaternion = [
+        #     transform.transform.rotation.x,
+        #     transform.transform.rotation.y,
+        #     transform.transform.rotation.z,
+        #     transform.transform.rotation.w
+        # ]
         
-        # Update yaw
-        yaw += delta_theta
+        # (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
 
-        # Convert euler angles back to quaternion
-        quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+        # transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
+        # transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
+        # transform.transform.translation.z += 0.0  # No change in Z
 
-        # Update transform rotation quaternion
-        transform.transform.rotation.x = quaternion[0]
-        transform.transform.rotation.y = quaternion[1]
-        transform.transform.rotation.z = quaternion[2]
-        transform.transform.rotation.w = quaternion[3]
+        # # Update yaw
+        # yaw += delta_theta
 
-        # Publish the updated transform
-        self.broadcaster.sendTransform(transform)
+        # # Convert euler angles back to quaternion
+        # quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+
+        # # Update transform rotation quaternion
+        # transform.transform.rotation.x = quaternion[0]
+        # transform.transform.rotation.y = quaternion[1]
+        # transform.transform.rotation.z = quaternion[2]
+        # transform.transform.rotation.w = quaternion[3]
+
+        # # Publish the updated transform
+        # self.broadcaster.sendTransform(transform)
 
 
         
@@ -186,3 +201,5 @@ if __name__ == '__main__':
         node.run()
     except rospy.ROSInterruptException:
         pass
+    finally:
+        node.disable_steppers()
