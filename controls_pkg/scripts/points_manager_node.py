@@ -3,7 +3,7 @@
 import rospy
 import tf2_ros
 import tf.transformations as tf_trans
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, TransformStamped
 from std_msgs.msg import Bool, Header, Int64MultiArray
 
 import time
@@ -57,6 +57,7 @@ class PointsManagerNode():
         encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
 
         self.onStartup()
+        self.pubInitialTf()
 
     def enable_stepper(self, val):
 
@@ -109,6 +110,9 @@ class PointsManagerNode():
         cur_ind = 0
 
         while not rospy.is_shutdown():
+
+            #TEST self.updateTf()
+            
             goal_point = self.points_list[cur_ind]
             self.marker_set_pos_publisher.publish(goal_point) # TODO: publishes move at node freq so might wanna change this
             # print("Goal point: "+str(goal_point))
@@ -174,6 +178,24 @@ class PointsManagerNode():
         else:
             return False
 
+    def pubInitialTf(self):
+        target_frame = "world"  # Update this with your target frame
+        source_frame = "base_link"  # Update this with your source frame
+
+        # Initialize the initial transform (e.g., at the start they are assumed to be the same)
+        transform = TransformStamped()
+        transform.header.frame_id = target_frame
+        transform.child_frame_id = source_frame
+        transform.transform.translation.x = 0.0
+        transform.transform.translation.y = 0.0
+        transform.transform.translation.z = 0.0
+        transform.transform.rotation.x = 0.0
+        transform.transform.rotation.y = 0.0
+        transform.transform.rotation.z = 0.0
+        transform.transform.rotation.w = 1.0
+
+        self.transform_braodcaster.sendTransform(transform)
+
     def curPosCallback(self, msg):
 
         Asteps = msg.point.x
@@ -200,39 +222,43 @@ class PointsManagerNode():
         delta_s = (self.wheel_radius / 2) * (theta_r + theta_l)
         delta_theta = (self.wheel_radius / self.frame_base_length) * (theta_r - theta_l)
 
-        transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time())
+        self.updateTf(delta_s, delta_theta)
 
-        transform.header.stamp = rospy.time.now()
-        
-        quaternion = [
-            transform.transform.rotation.x,
-            transform.transform.rotation.y,
-            transform.transform.rotation.z,
-            transform.transform.rotation.w
-        ]
-        
-        (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
+    def updateTf(self, delta_s = 0.1, delta_theta = np.pi / 8):
+        try:
+            transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time())
 
-        transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
-        transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
-        transform.transform.translation.z += 0.0  # No change in Z
+            transform.header.stamp = rospy.time.now()
+            
+            quaternion = [
+                transform.transform.rotation.x,
+                transform.transform.rotation.y,
+                transform.transform.rotation.z,
+                transform.transform.rotation.w
+            ]
+            
+            (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
 
-        # Update yaw
-        yaw += delta_theta
+            transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
+            transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
+            transform.transform.translation.z += 0.0  # No change in Z
 
-        # Convert euler angles back to quaternion
-        quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+            # Update yaw
+            yaw += delta_theta
 
-        # Update transform rotation quaternion
-        transform.transform.rotation.x = quaternion[0]
-        transform.transform.rotation.y = quaternion[1]
-        transform.transform.rotation.z = quaternion[2]
-        transform.transform.rotation.w = quaternion[3]
+            # Convert euler angles back to quaternion
+            quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
 
-        # Publish the updated transform
-        self.transform_braodcaster.sendTransform(transform)
+            # Update transform rotation quaternion
+            transform.transform.rotation.x = quaternion[0]
+            transform.transform.rotation.y = quaternion[1]
+            transform.transform.rotation.z = quaternion[2]
+            transform.transform.rotation.w = quaternion[3]
 
-
+            # Publish the updated transform
+            self.transform_braodcaster.sendTransform(transform)
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn("Failed to update transform: %s", str(e))
         
 if __name__ == '__main__':
     try:

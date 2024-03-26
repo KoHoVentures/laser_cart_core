@@ -16,7 +16,7 @@
 
   <!-- Static transform UPDATEEEEE -->
   <node pkg="tf2_ros" type="static_transform_publisher" name="marker_home_broadcaster" args="1 0 0 0 0 0 1 base_link marker_home_link" />
-  <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_static_broadcaster" args="0 0 0 0 0 0 1 world base_link" />
+  <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_static_broadcaster" args="0 0 0 0 0 0 1 world base_link" /> -->
 
   <!-- Run marker_keyboard_node.py in a new terminal -->
   <!-- <node pkg="controls_pkg" type="marker_keyboard_node.py" name="marker_keyboard_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/> -->
