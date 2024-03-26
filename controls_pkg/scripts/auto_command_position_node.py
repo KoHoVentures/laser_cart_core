@@ -30,25 +30,29 @@ def main():
     rospy.init_node('auto_command_position_node', anonymous=True)
     rate = rospy.Rate(10)  # 10hz
 
+    # Params
+    enable_stepper = rospy.get_param('~enable_stepper', True)
+
     # Create publishers
     marker_set_pos_publisher = rospy.Publisher('marker_position_topic', PointStamped, queue_size=10)
     marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
     stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
 
     enable_stepper_msg = Bool()
-    enable_stepper_msg.data = False
+    enable_stepper_msg.data = enable_stepper
 
     tst_msg = Bool()
-    tst_msg.data = True
+    tst_msg.data = False
 
-    # Enable stepper
-    stepper_enable_disable_publisher.publish(enable_stepper_msg)
 
     # Create subscriber
     stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, curPosCallback)
 
     while not rospy.is_shutdown():
         # point = points_list[0]
+
+        # Enable stepper
+        stepper_enable_disable_publisher.publish(enable_stepper_msg)
 
         point = input_handler()
         if point:

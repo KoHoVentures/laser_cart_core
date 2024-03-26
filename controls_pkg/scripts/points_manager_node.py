@@ -6,6 +6,7 @@ import tf.transformations as tf_trans
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import Bool, Header, Int64MultiArray
 
+import time
 import math
 import numpy as np
 
@@ -22,10 +23,11 @@ class PointsManagerNode():
         self.points_threshold = rospy.get_param('~points_threshold', '0.001')
 
         self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+        self.transform_braodcaster = tf2_ros.TransformBroadcaster()
+
         self.broadcaster = tf2_ros.TransformBroadcaster()
 
-        points_list = [[0.01, 0.02, 0.01], [0.05, 0.05, 0.02], [0.1, 0.03, 0.01], [0.0, 0.0, 0.0]] # in m
+        points_list = [[0.01, 0.15, 0.01], [0.1, 0.1, 0.02]] # in m
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
         
         self.points_list = []
@@ -33,7 +35,7 @@ class PointsManagerNode():
         for point in points_list:
             self.points_list.append(self.initPoint(point))
 
-        self.home_point = self.initPoint([0, 0, 0])
+        self.home_point = self.initPoint([0.0, 0.0, 0.0])
 
         self.rate = rospy.Rate(10)  # 10hz
 
@@ -54,9 +56,11 @@ class PointsManagerNode():
         stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
         encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
 
-    def disable_steppers(self):
+        self.onStartup()
 
-        self.enable_stepper_msg.data = False
+    def enable_stepper(self, val):
+
+        self.enable_stepper_msg.data = val
         # Disable stepper
         self.stepper_enable_disable_publisher.publish(self.enable_stepper_msg)
         
@@ -104,9 +108,6 @@ class PointsManagerNode():
 
         cur_ind = 0
 
-        # Enable stepper
-        self.stepper_enable_disable_publisher.publish(self.enable_stepper_msg)
-
         while not rospy.is_shutdown():
             goal_point = self.points_list[cur_ind]
             self.marker_set_pos_publisher.publish(goal_point) # TODO: publishes move at node freq so might wanna change this
@@ -120,12 +121,48 @@ class PointsManagerNode():
                 print("Moving to point number " + str(cur_ind + 1))
             
             if cur_ind >= len(self.points_list):
-                self.marker_set_pos_publisher.publish(self.home_point)
+                print("Point list complete, going home")
+                self.goHome()
+                self.onShutDown()
 
-                print("Point list complete, going home and killing node")
+                print("Killing node")
                 return
                 
             self.rate.sleep()
+
+        # Node done running
+
+    def onStartup(self):
+        print("Enabling steppers from pi")
+        start_time = time.time()
+        spam_time = 1
+        spam_freq = 10 # Hz
+        while (time.time() - start_time) < spam_time:  # Loop for 3 seconds
+            self.enable_stepper(True)
+            time.sleep(1/spam_freq)  # Sleep for 1 second
+
+    def goHome(self):
+        start_time = time.time()
+        spam_time = 1
+        spam_freq = 10 # Hz
+
+        # WARNING, bad code with magic numbers
+        while (time.time() - start_time) < spam_time:
+            self.marker_set_pos_publisher.publish(self.home_point)
+            time.sleep(1/spam_freq)  # Sleep for 1 second
+
+    def onShutDown(self):
+        time.sleep(7) # Wait for 7 seconds
+        start_time = time.time()
+        spam_time = 1
+        spam_freq = 10 # Hz
+
+        print("Disabling steppers from pi")
+        while (time.time() - start_time) < spam_time:
+            self.enable_stepper(False)
+            time.sleep(1/spam_freq)  # Sleep for 1 second
+
+        time.sleep(7) #TODO REMOVE
 
     def pointReached2D(self, cur_pos, goal_pos, point_threshold):
 
@@ -146,7 +183,7 @@ class PointsManagerNode():
         y = ((Asteps - Bsteps) / (2 * self.steps_per_mm)) / 1000.0
         z = 0.0 # TODO
 
-        print("Current position (in m): "+str(x) + " " + str(y) + " " + str(z))
+        #print("Current position (in m): "+str(x) + " " + str(y) + " " + str(z))
 
         self.cur_pos.header = msg.header
         self.cur_pos.point.x = x
@@ -155,7 +192,7 @@ class PointsManagerNode():
 
     def encoderCallback(self, msg):
         # Define your callback function
-        # print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
+        print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
 
         theta_l = msg.point.x # hacky, should have been erray but debug taking too long
         theta_r = msg.point.y # hacky, should have been erray but debug taking too long
@@ -163,35 +200,37 @@ class PointsManagerNode():
         delta_s = (self.wheel_radius / 2) * (theta_r + theta_l)
         delta_theta = (self.wheel_radius / self.frame_base_length) * (theta_r - theta_l)
 
-        # transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time(0))
+        transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time())
 
-        # quaternion = [
-        #     transform.transform.rotation.x,
-        #     transform.transform.rotation.y,
-        #     transform.transform.rotation.z,
-        #     transform.transform.rotation.w
-        # ]
+        transform.header.stamp = rospy.time.now()
         
-        # (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
+        quaternion = [
+            transform.transform.rotation.x,
+            transform.transform.rotation.y,
+            transform.transform.rotation.z,
+            transform.transform.rotation.w
+        ]
+        
+        (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
 
-        # transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
-        # transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
-        # transform.transform.translation.z += 0.0  # No change in Z
+        transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
+        transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
+        transform.transform.translation.z += 0.0  # No change in Z
 
-        # # Update yaw
-        # yaw += delta_theta
+        # Update yaw
+        yaw += delta_theta
 
-        # # Convert euler angles back to quaternion
-        # quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+        # Convert euler angles back to quaternion
+        quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
 
-        # # Update transform rotation quaternion
-        # transform.transform.rotation.x = quaternion[0]
-        # transform.transform.rotation.y = quaternion[1]
-        # transform.transform.rotation.z = quaternion[2]
-        # transform.transform.rotation.w = quaternion[3]
+        # Update transform rotation quaternion
+        transform.transform.rotation.x = quaternion[0]
+        transform.transform.rotation.y = quaternion[1]
+        transform.transform.rotation.z = quaternion[2]
+        transform.transform.rotation.w = quaternion[3]
 
-        # # Publish the updated transform
-        # self.broadcaster.sendTransform(transform)
+        # Publish the updated transform
+        self.transform_braodcaster.sendTransform(transform)
 
 
         
@@ -201,5 +240,6 @@ if __name__ == '__main__':
         node.run()
     except rospy.ROSInterruptException:
         pass
-    finally:
-        node.disable_steppers()
+    # finally:
+    #     print("Dsiabling steppers")
+    #     node.onShutDown()

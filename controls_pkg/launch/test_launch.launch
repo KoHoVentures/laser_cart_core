@@ -20,7 +20,9 @@
 
   <!-- Run marker_keyboard_node.py in a new terminal -->
   <!-- <node pkg="controls_pkg" type="marker_keyboard_node.py" name="marker_keyboard_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/> -->
-  <!-- <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/> -->
+  <!-- <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
+    <param name="enable_stepper" type="bool" value="true"/>
+  </node> -->
   <node pkg="controls_pkg" type="points_manager_node.py" name="points_manager_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
     <param name="min_dist_to_transition" type="double" value="$(arg min_dist_to_transition_arg)"/>
     <param name="steps_per_mm" type="double" value="$(arg steps_per_mm_arg)"/>
