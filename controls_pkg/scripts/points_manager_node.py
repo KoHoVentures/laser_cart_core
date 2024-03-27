@@ -23,9 +23,8 @@ class PointsManagerNode():
         self.points_threshold = rospy.get_param('~points_threshold', '0.001')
 
         self.tf_buffer = tf2_ros.Buffer()
-        self.transform_braodcaster = tf2_ros.TransformBroadcaster()
-
-        self.broadcaster = tf2_ros.TransformBroadcaster()
+        self.transform_broadcaster = tf2_ros.TransformBroadcaster()
+        self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
         points_list = [[0.01, 0.15, 0.01], [0.1, 0.1, 0.02]] # in m
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
@@ -112,6 +111,7 @@ class PointsManagerNode():
         while not rospy.is_shutdown():
 
             #TEST self.updateTf()
+            # self.updateTf()
             
             goal_point = self.points_list[cur_ind]
             self.marker_set_pos_publisher.publish(goal_point) # TODO: publishes move at node freq so might wanna change this
@@ -179,8 +179,8 @@ class PointsManagerNode():
             return False
 
     def pubInitialTf(self):
-        target_frame = "world"  # Update this with your target frame
-        source_frame = "base_link"  # Update this with your source frame
+        target_frame = "base_link"  # Update this with your target frame
+        source_frame = "world"  # Update this with your source frame
 
         # Initialize the initial transform (e.g., at the start they are assumed to be the same)
         transform = TransformStamped()
@@ -194,7 +194,7 @@ class PointsManagerNode():
         transform.transform.rotation.z = 0.0
         transform.transform.rotation.w = 1.0
 
-        self.transform_braodcaster.sendTransform(transform)
+        self.transform_broadcaster.sendTransform(transform)
 
     def curPosCallback(self, msg):
 
@@ -225,10 +225,11 @@ class PointsManagerNode():
         self.updateTf(delta_s, delta_theta)
 
     def updateTf(self, delta_s = 0.1, delta_theta = np.pi / 8):
+        
         try:
             transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time())
 
-            transform.header.stamp = rospy.time.now()
+            transform.header.stamp = rospy.Time.now()
             
             quaternion = [
                 transform.transform.rotation.x,
@@ -256,9 +257,9 @@ class PointsManagerNode():
             transform.transform.rotation.w = quaternion[3]
 
             # Publish the updated transform
-            self.transform_braodcaster.sendTransform(transform)
+            self.transform_broadcaster.sendTransform(transform)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logwarn("Failed to update transform: %s", str(e))
+            print("Failed to update transform: %s", str(e))
         
 if __name__ == '__main__':
     try:
