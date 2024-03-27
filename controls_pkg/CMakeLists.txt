@@ -163,6 +163,7 @@ catkin_install_python(PROGRAMS
   scripts/tf_testing.py
   scripts/auto_command_position_node.py
   scripts/points_manager_node.py
+  scripts/dummy_encoder_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
