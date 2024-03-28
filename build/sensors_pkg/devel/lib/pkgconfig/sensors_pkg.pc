@@ -1,0 +1,8 @@
+prefix=/home/aadi/Documents/Koho_all/src/laser_cart_core/build/sensors_pkg/devel
+
+Name: sensors_pkg
+Description: Description of sensors_pkg
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

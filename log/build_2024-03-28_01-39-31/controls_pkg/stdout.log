@@ -1,0 +1,54 @@
+-- The C compiler identification is GNU 9.4.0
+-- The CXX compiler identification is GNU 9.4.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Using CATKIN_DEVEL_PREFIX: /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/devel
+-- Using CMAKE_PREFIX_PATH: /home/aadi/Documents/Koho_all/devel;/opt/ros/noetic
+-- This workspace overlays: /home/aadi/Documents/Koho_all/devel;/opt/ros/noetic
+-- Found PythonInterp: /usr/bin/python3 (found suitable version "3.8.10", minimum required is "3") 
+-- Using PYTHON_EXECUTABLE: /usr/bin/python3
+-- Using Debian Python package layout
+-- Found PY_em: /usr/lib/python3/dist-packages/em.py  
+-- Using empy: /usr/lib/python3/dist-packages/em.py
+-- Using CATKIN_ENABLE_TESTING: ON
+-- Call enable_testing()
+-- Using CATKIN_TEST_RESULTS_DIR: /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/test_results
+-- Forcing gtest/gmock from source, though one was otherwise available.
+-- Found gtest sources under '/usr/src/googletest': gtests will be built
+-- Found gmock sources under '/usr/src/googletest': gmock will be built
+-- Found PythonInterp: /usr/bin/python3 (found version "3.8.10") 
+-- Found Threads: TRUE  
+-- Using Python nosetests: /usr/bin/nosetests3
+-- catkin 0.8.10
+-- BUILD_SHARED_LIBS is on
+-- Using these message generators: gencpp;geneus;genlisp;gennodejs;genpy
+-- Installing devel-space wrapper /home/aadi/Documents/Koho_all/src/laser_cart_core/controls_pkg/scripts/tf_testing.py to /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/devel/lib/controls_pkg
+-- Installing devel-space wrapper /home/aadi/Documents/Koho_all/src/laser_cart_core/controls_pkg/scripts/auto_command_position_node.py to /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/devel/lib/controls_pkg
+-- Installing devel-space wrapper /home/aadi/Documents/Koho_all/src/laser_cart_core/controls_pkg/scripts/points_manager_node.py to /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/devel/lib/controls_pkg
+-- Installing devel-space wrapper /home/aadi/Documents/Koho_all/src/laser_cart_core/controls_pkg/scripts/dummy_encoder_node.py to /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/devel/lib/controls_pkg
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg
+[35m[1mScanning dependencies of target tests[0m
+Built target tests
+-- Install configuration: ""
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/pkgconfig/controls_pkg.pc
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/cmake/controls_pkgConfig.cmake
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/cmake/controls_pkgConfig-version.cmake
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/package.xml
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/tf_testing.py
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/auto_command_position_node.py
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/points_manager_node.py
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/dummy_encoder_node.py
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/launch
+-- Installing: /home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/launch/test_launch.launch

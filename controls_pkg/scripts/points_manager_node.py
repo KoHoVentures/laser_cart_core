@@ -2,13 +2,16 @@
 
 import rospy
 import tf2_ros
+
 import tf.transformations as tf_trans
-from geometry_msgs.msg import PointStamped, TransformStamped
+from tf2_geometry_msgs import PointStamped
+from geometry_msgs.msg import TransformStamped
 from std_msgs.msg import Bool, Header, Int64MultiArray
 
 import time
 import math
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 class PointsManagerNode():
     def __init__(self):
@@ -16,25 +19,21 @@ class PointsManagerNode():
         rospy.init_node('points_manager_node', anonymous=True)
 
         # ROS params
-        self.min_dist_to_transition = rospy.get_param('~min_dist_to_transition', '0.003')
-        self.steps_per_mm = rospy.get_param('~steps_per_mm', '80') # From arduino
-        self.wheel_radius = rospy.get_param('~wheel_radius', '0.01')
-        self.frame_base_length = rospy.get_param('~frame_base_length', '0.02')
-        self.points_threshold = rospy.get_param('~points_threshold', '0.001')
+        self.min_dist_to_transition = float(rospy.get_param('~min_dist_to_transition'))
+        self.steps_per_mm = int(rospy.get_param('~steps_per_mm')) # From arduino
+        self.wheel_radius = float(rospy.get_param('~wheel_radius'))
+        self.frame_base_length = float(rospy.get_param('~frame_base_length'))
+        self.points_threshold = float(rospy.get_param('~points_threshold'))
 
+        self.ticks_per_revolution = int(rospy.get_param('~ticks_per_revolution')) # Width of the robot base (distance between wheels)
+        
+        
         self.tf_buffer = tf2_ros.Buffer()
         self.transform_broadcaster = tf2_ros.TransformBroadcaster()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        points_list = [[0.01, 0.15, 0.01], [0.1, 0.1, 0.02]] # in m
+        self.points_list = [[0.01, 0.15, 0.0], [0.1, 0.1, 0.0]] # in m
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
-        
-        self.points_list = []
-
-        for point in points_list:
-            self.points_list.append(self.initPoint(point))
-
-        self.home_point = self.initPoint([0.0, 0.0, 0.0])
 
         self.rate = rospy.Rate(10)  # 10hz
 
@@ -51,12 +50,17 @@ class PointsManagerNode():
 
         self.cur_pos = PointStamped()
 
+        self.first_update_tf = True
+        
         # Create subscriber
         stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
         encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
 
+        # Other initilizations
+        self.prev_theta_l = 0.0
+        self.prev_theta_r = 0.0
+        
         self.onStartup()
-        self.pubInitialTf()
 
     def enable_stepper(self, val):
 
@@ -91,10 +95,11 @@ class PointsManagerNode():
         new_points.append(points_list[-1])  # Include last original point
         return new_points
     
-    def initPoint(self, given_point):
+    def initPoint(self, given_point, frame_id):
         point_stamped_msg = PointStamped()
 
         point_stamped_msg.header = Header()
+        point_stamped_msg.header.frame_id = frame_id
         point_stamped_msg.header.stamp = rospy.Time.now()
 
         point_stamped_msg.point.x = float(given_point[0])
@@ -108,12 +113,24 @@ class PointsManagerNode():
 
         cur_ind = 0
 
-        while not rospy.is_shutdown():
+        self.points_list_ros = []
 
-            #TEST self.updateTf()
-            # self.updateTf()
+        for point in self.points_list:
+            self.points_list_ros.append(self.initPoint(point, frame_id = "world"))
+
+        self.home_point = self.initPoint([0.0, 0.0, 0.0], frame_id="world")
+        
+        while not rospy.is_shutdown():
             
-            goal_point = self.points_list[cur_ind]
+            goal_point_world = self.points_list_ros[cur_ind]
+            try:
+                transform = self.tf_buffer.lookup_transform("world", "base_link", rospy.Time())
+                goal_point = self.tf_buffer.transform(goal_point_world, "base_link")
+                # rospy.loginfo("Transformed point: (%f, %f, %f) in frame: %s", goal_point_world.point.x, goal_point_world.point.y, goal_point_world.point.z, goal_point_world.header.frame_id)
+            except tf2_ros.TransformException as ex:
+                rospy.logerr("Failed to transform point: %s", ex)
+                continue
+            
             self.marker_set_pos_publisher.publish(goal_point) # TODO: publishes move at node freq so might wanna change this
             # print("Goal point: "+str(goal_point))
             self.marker_get_pos_publisher.publish(self.get_pos_msg) # Populates self.cur_pos with the latest position
@@ -124,7 +141,7 @@ class PointsManagerNode():
                 cur_ind += 1
                 print("Moving to point number " + str(cur_ind + 1))
             
-            if cur_ind >= len(self.points_list):
+            if cur_ind >= len(self.points_list_ros):
                 print("Point list complete, going home")
                 self.goHome()
                 self.onShutDown()
@@ -178,14 +195,15 @@ class PointsManagerNode():
         else:
             return False
 
-    def pubInitialTf(self):
-        target_frame = "base_link"  # Update this with your target frame
-        source_frame = "world"  # Update this with your source frame
+    def getInitialTf(self):
+        target_frame = "world"  # Update this with your target frame
+        source_frame = "base_link"  # Update this with your source frame
 
         # Initialize the initial transform (e.g., at the start they are assumed to be the same)
         transform = TransformStamped()
-        transform.header.frame_id = target_frame
-        transform.child_frame_id = source_frame
+        transform.header.stamp = rospy.Time.now()
+        transform.header.frame_id = source_frame
+        transform.child_frame_id = target_frame
         transform.transform.translation.x = 0.0
         transform.transform.translation.y = 0.0
         transform.transform.translation.z = 0.0
@@ -194,7 +212,8 @@ class PointsManagerNode():
         transform.transform.rotation.z = 0.0
         transform.transform.rotation.w = 1.0
 
-        self.transform_broadcaster.sendTransform(transform)
+        return transform
+        # self.transform_broadcaster.sendTransform(transform)
 
     def curPosCallback(self, msg):
 
@@ -214,53 +233,125 @@ class PointsManagerNode():
 
     def encoderCallback(self, msg):
         # Define your callback function
-        print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
+        #print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
 
-        theta_l = msg.point.x # hacky, should have been erray but debug taking too long
-        theta_r = msg.point.y # hacky, should have been erray but debug taking too long
+        delta_theta_l = msg.point.x - self.prev_theta_l # hacky, should have been erray but debug taking too long
+        delta_theta_r = msg.point.y - self.prev_theta_r# hacky, should have been erray but debug taking too long
+        
+        self.prev_theta_l = msg.point.x
+        self.prev_theta_r = msg.point.y
+        
+        # # Cap encoder vals to ticks_per_revolution
+        # delta_theta_l = delta_theta_l % self.ticks_per_revolution
+        # delta_theta_r = delta_theta_r % self.ticks_per_revolution
+        
+        # Convert encoder values to radians
+        delta_theta_l = delta_theta_l * 2 * math.pi / self.ticks_per_revolution
+        delta_theta_r = delta_theta_r * 2 * math.pi / self.ticks_per_revolution
+        
+        # print("Theta l: "+str(delta_theta_l)+" | Theta r: "+str(delta_theta_r))
+            
+        delta_s = (self.wheel_radius / 2) * (delta_theta_r + delta_theta_l)
+        delta_theta = (self.wheel_radius / self.frame_base_length) * (delta_theta_r - delta_theta_l)
 
-        delta_s = (self.wheel_radius / 2) * (theta_r + theta_l)
-        delta_theta = (self.wheel_radius / self.frame_base_length) * (theta_r - theta_l)
-
+        # print("Delta s: "+str(delta_s)+" | Delta theta: "+str(delta_theta))
+        
         self.updateTf(delta_s, delta_theta)
 
     def updateTf(self, delta_s = 0.1, delta_theta = np.pi / 8):
         
+        if(self.first_update_tf):
+            self.first_update_tf = False
+            transform = self.getInitialTf()
+            self.transform_broadcaster.sendTransform(transform)
+            return
+        
         try:
-            transform = self.tf_buffer.lookup_transform("base_link", "world", rospy.Time())
+            tf_cur = self.tf_buffer.lookup_transform("world", "base_link", rospy.Time())
 
-            transform.header.stamp = rospy.Time.now()
+            roll, pitch, yaw = tf_trans.euler_from_quaternion([tf_cur.transform.rotation.x,
+                                                               tf_cur.transform.rotation.y,
+                                                               tf_cur.transform.rotation.z,
+                                                               tf_cur.transform.rotation.w])
             
-            quaternion = [
-                transform.transform.rotation.x,
-                transform.transform.rotation.y,
-                transform.transform.rotation.z,
-                transform.transform.rotation.w
-            ]
+            tf_cur.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
+            tf_cur.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
+            tf_cur.transform.translation.z = 0.0  # No change in Z
             
-            (roll, pitch, yaw) = tf_trans.euler_from_quaternion(quaternion)
-
-            transform.transform.translation.x += delta_s * np.cos(yaw + delta_theta / 2.0)
-            transform.transform.translation.y += delta_s * np.sin(yaw + delta_theta / 2.0)
-            transform.transform.translation.z += 0.0  # No change in Z
-
-            # Update yaw
-            yaw += delta_theta
-
+            tf_cur_homogen = self.quaternion_translation_to_homogeneous(np.array([tf_cur.transform.rotation.x,
+                                                                                  tf_cur.transform.rotation.y,
+                                                                                  tf_cur.transform.rotation.z,
+                                                                                  tf_cur.transform.rotation.w]),
+                                                                        np.array([tf_cur.transform.translation.x,
+                                                                                  tf_cur.transform.translation.y,
+                                                                                  tf_cur.transform.translation.z]))
+            yaw = delta_theta
+            
             # Convert euler angles back to quaternion
-            quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+            q_rot = tf_trans.quaternion_from_euler(0.0, 0.0, yaw)
+            tf_rot_homogen = self.quaternion_translation_to_homogeneous(np.array(q_rot),
+                                                                        np.array([0.0, 0, 0]))
+            
+            tf_transformed_homogen = np.matmul(tf_cur_homogen, tf_rot_homogen)
+            
+            tf_transformed_quat, tf_transformed_trans = self.homogeneous_to_quaternion_and_translation(tf_transformed_homogen)
+
+            
+            # Updated tf
+            tf_transformed = TransformStamped()
+            
+            tf_transformed.header.stamp = rospy.Time.now()
+            tf_transformed.header.frame_id = tf_cur.header.frame_id
+            tf_transformed.child_frame_id = tf_cur.child_frame_id
+            
+            tf_transformed.transform.translation.x = tf_transformed_trans[0]
+            tf_transformed.transform.translation.y = tf_transformed_trans[1]
+            tf_transformed.transform.translation.z = tf_transformed_trans[2]
 
             # Update transform rotation quaternion
-            transform.transform.rotation.x = quaternion[0]
-            transform.transform.rotation.y = quaternion[1]
-            transform.transform.rotation.z = quaternion[2]
-            transform.transform.rotation.w = quaternion[3]
-
+            tf_transformed.transform.rotation.x = tf_transformed_quat[0]
+            tf_transformed.transform.rotation.y = tf_transformed_quat[1]
+            tf_transformed.transform.rotation.z = tf_transformed_quat[2]
+            tf_transformed.transform.rotation.w = tf_transformed_quat[3]
+            
             # Publish the updated transform
-            self.transform_broadcaster.sendTransform(transform)
+            self.transform_broadcaster.sendTransform(tf_transformed)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             print("Failed to update transform: %s", str(e))
-        
+    
+    def quaternion_translation_to_homogeneous(self, quaternion, translation):
+        """
+        Convert quaternion and translation values to a homogeneous transformation matrix.
+
+        Parameters:
+        - quaternion: numpy array representing the quaternion [x, y, z, w]
+        - translation: numpy array representing the translation [tx, ty, tz]
+
+        Returns:
+        - homogeneous_matrix: 4x4 numpy array representing the homogeneous transformation matrix
+        """
+        # Convert quaternion to rotation matrix
+        rotation_matrix = Rotation.from_quat(quaternion).as_matrix()
+
+        # Create homogeneous transformation matrix
+        homogeneous_matrix = np.eye(4)
+        homogeneous_matrix[:3, :3] = rotation_matrix
+        homogeneous_matrix[:3, 3] = translation
+
+        return homogeneous_matrix
+    
+    def homogeneous_to_quaternion_and_translation(self, matrix):
+        # Extract rotation matrix from the homogeneous transformation matrix
+        rotation_matrix = matrix[:3, :3]
+
+        # Convert the rotation matrix to quaternion
+        quaternion = Rotation.from_matrix(rotation_matrix).as_quat()
+
+        # Extract translation vector from the homogeneous transformation matrix
+        translation = matrix[:3, 3]
+
+        return quaternion, translation
+
 if __name__ == '__main__':
     try:
         node = PointsManagerNode()
