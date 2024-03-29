@@ -123,9 +123,26 @@ class PointsManagerNode():
         while not rospy.is_shutdown():
             
             goal_point_world = self.points_list_ros[cur_ind]
-            try:
-                transform = self.tf_buffer.lookup_transform("world", "base_link", rospy.Time())
-                goal_point = self.tf_buffer.transform(goal_point_world, "base_link")
+            try: 
+                tf_cur = self.tf_buffer.lookup_transform("world", "base_link", rospy.Time())
+                
+                tf_homogen = self.quaternion_translation_to_homogeneous(np.array([tf_cur.transform.rotation.x,
+                                                                                  tf_cur.transform.rotation.y,
+                                                                                  tf_cur.transform.rotation.z,
+                                                                                  tf_cur.transform.rotation.w]),
+                                                                        np.array([tf_cur.transform.translation.x,
+                                                                                  tf_cur.transform.translation.y,
+                                                                                  tf_cur.transform.translation.z]))
+                tf_homogen = np.linalg.inv(tf_homogen)
+                
+                goal_trasnformed = np.matmul(tf_homogen, np.array([goal_point_world.point.x,
+                                               goal_point_world.point.y,
+                                               goal_point_world.point.z,
+                                               1]))
+
+                goal_point = self.initPoint(goal_trasnformed[:3], frame_id="base_link")
+                
+                # goal_point = self.tf_buffer.transform(goal_point_world, "base_link")
                 # rospy.loginfo("Transformed point: (%f, %f, %f) in frame: %s", goal_point_world.point.x, goal_point_world.point.y, goal_point_world.point.z, goal_point_world.header.frame_id)
             except tf2_ros.TransformException as ex:
                 rospy.logerr("Failed to transform point: %s", ex)
