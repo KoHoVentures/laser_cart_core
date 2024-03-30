@@ -11,7 +11,26 @@ from std_msgs.msg import Bool, Header, Int64MultiArray
 import time
 import math
 import numpy as np
+import csv
 from scipy.spatial.transform import Rotation
+
+class Point:
+    def __init__(self, point_xyz, frame="world", move_type=0):
+        self.x = point_xyz[0]
+        self.y = point_xyz[1]
+        self.z = point_xyz[2]
+        
+        self.point_stamped_msg = PointStamped()
+
+        self.point_stamped_msg.header = Header()
+        self.point_stamped_msg.header.frame_id = frame
+        self.point_stamped_msg.header.stamp = rospy.Time.now()
+
+        self.point_stamped_msg.point.x = float(point_xyz[0])
+        self.point_stamped_msg.point.y = float(point_xyz[1])
+        self.point_stamped_msg.point.z = float(point_xyz[2])
+
+        self.move_type = move_type
 
 class PointsManagerNode():
     def __init__(self):
@@ -26,13 +45,32 @@ class PointsManagerNode():
         self.points_threshold = float(rospy.get_param('~points_threshold'))
 
         self.ticks_per_revolution = int(rospy.get_param('~ticks_per_revolution')) # Width of the robot base (distance between wheels)
-        
+        filename = rospy.get_param('~points_file_name')
+        self.sim_enabled = rospy.get_param('~sim_enabled')
         
         self.tf_buffer = tf2_ros.Buffer()
         self.transform_broadcaster = tf2_ros.TransformBroadcaster()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.points_list = [[0.01, 0.15, 0.0], [0.1, 0.1, 0.0]] # in m
+        self.points_list = []
+        with open(filename, 'r') as file:
+            # Create a CSV reader object
+            csv_reader = csv.DictReader(file)
+            
+            # Iterate over each row in the CSV file
+            for row in csv_reader:
+                new_point = [float(row['X']), float(row['Y']), 0.0]
+                move = int(row['Move'])
+                self.points_list.append(Point(new_point, frame="world", move_type=int(row['Move'])))
+        
+        # self.points_list = [Point(point_xyz = [0.01, 0.15, 0.0], frame="world", move_type=0),
+        #                     Point(point_xyz = [0.9, 0.9, 0.0], frame = "world", move_type=1)] # in m
+        
+        self.points_list.insert(0, Point(point_xyz = [0.0, 0.0, 0.0], frame = "world", move_type=self.points_list[0].move_type - 1)) # Append home at the start
+        
+        
+        self.home_point = Point([0.0, 0.0, 0.0], "world", self.points_list[-1].move_type + 1)
+        
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
 
         self.rate = rospy.Rate(10)  # 10hz
@@ -41,32 +79,40 @@ class PointsManagerNode():
         self.marker_set_pos_publisher = rospy.Publisher('marker_position_topic', PointStamped, queue_size=10)
         self.marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
         self.stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
+        self.pen_enable_disable_publisher = rospy.Publisher('pen_enable_disable_topic', Bool, queue_size=10)
+
+        # Create subscriber
+        stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
+        encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
+
 
         self.get_pos_msg = Bool()
         self.enable_stepper_msg = Bool()
+        self.enable_pen_msg = Bool()
     
         self.get_pos_msg.data = True
-        self.enable_stepper_msg.data = True
+        self.enable_stepper_msg.data = True # Probably not needed
+        self.enable_pen_msg.data = True # Probably not needed
 
         self.cur_pos = PointStamped()
 
         self.first_update_tf = True
         
-        # Create subscriber
-        stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
-        encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
-
-        # Other initilizations
+        # Other initializations
         self.prev_theta_l = 0.0
         self.prev_theta_r = 0.0
         
         self.onStartup()
 
-    def enable_stepper(self, val):
+    def enable_disable_stepper(self, val):
 
         self.enable_stepper_msg.data = val
-        # Disable stepper
         self.stepper_enable_disable_publisher.publish(self.enable_stepper_msg)
+    
+    def enable_disable_pen(self, val):
+
+        self.enable_pen_msg.data = val
+        self.stepper_enable_disable_publisher.publish(self.enable_pen_msg)
         
 
     def interpolate_points(self, point1, point2, num_intermediate_points):
@@ -95,36 +141,23 @@ class PointsManagerNode():
         new_points.append(points_list[-1])  # Include last original point
         return new_points
     
-    def initPoint(self, given_point, frame_id):
-        point_stamped_msg = PointStamped()
-
-        point_stamped_msg.header = Header()
-        point_stamped_msg.header.frame_id = frame_id
-        point_stamped_msg.header.stamp = rospy.Time.now()
-
-        point_stamped_msg.point.x = float(given_point[0])
-        point_stamped_msg.point.y = float(given_point[1])
-        point_stamped_msg.point.z = float(given_point[2])
-
-        return point_stamped_msg
-    
 
     def run(self):
 
         cur_ind = 0
-
-        self.points_list_ros = []
-
-        for point in self.points_list:
-            self.points_list_ros.append(self.initPoint(point, frame_id = "world"))
-
-        self.home_point = self.initPoint([0.0, 0.0, 0.0], frame_id="world")
+        self.cur_point_world = self.points_list[cur_ind]
         
         while not rospy.is_shutdown():
             
-            goal_point_world = self.points_list_ros[cur_ind]
+            goal_point_world = self.points_list[cur_ind]
+            
+            if(self.cur_point_world.move_type == goal_point_world.move_type):
+                self.enable_disable_pen(True) # Enable pen if move types match
+            else:
+                self.enable_disable_pen(False) # Disable pen if move types dont match
+            
             try: 
-                tf_cur = self.tf_buffer.lookup_transform("world", "base_link", rospy.Time())
+                tf_cur = self.tf_buffer.lookup_transform("world", "pointer_link", rospy.Time())
                 
                 tf_homogen = self.quaternion_translation_to_homogeneous(np.array([tf_cur.transform.rotation.x,
                                                                                   tf_cur.transform.rotation.y,
@@ -135,30 +168,33 @@ class PointsManagerNode():
                                                                                   tf_cur.transform.translation.z]))
                 tf_homogen = np.linalg.inv(tf_homogen)
                 
-                goal_trasnformed = np.matmul(tf_homogen, np.array([goal_point_world.point.x,
-                                               goal_point_world.point.y,
-                                               goal_point_world.point.z,
+                goal_transformed = np.matmul(tf_homogen, np.array([goal_point_world.x,
+                                               goal_point_world.y,
+                                               goal_point_world.z,
                                                1]))
-
-                goal_point = self.initPoint(goal_trasnformed[:3], frame_id="base_link")
+                goal_point_pointer_link = Point(goal_transformed[:3], "pointer_link", goal_point_world.move_type)
                 
-                # goal_point = self.tf_buffer.transform(goal_point_world, "base_link")
-                # rospy.loginfo("Transformed point: (%f, %f, %f) in frame: %s", goal_point_world.point.x, goal_point_world.point.y, goal_point_world.point.z, goal_point_world.header.frame_id)
             except tf2_ros.TransformException as ex:
                 rospy.logerr("Failed to transform point: %s", ex)
                 continue
             
-            self.marker_set_pos_publisher.publish(goal_point) # TODO: publishes move at node freq so might wanna change this
-            # print("Goal point: "+str(goal_point))
-            self.marker_get_pos_publisher.publish(self.get_pos_msg) # Populates self.cur_pos with the latest position
+            self.marker_set_pos_publisher.publish(goal_point_pointer_link.point_stamped_msg) # TODO: publishes move at node freq so might wanna change this
 
-            pos_reached = self.pointReached2D(self.cur_pos, goal_point, self.min_dist_to_transition)
+            self.marker_get_pos_publisher.publish(self.get_pos_msg) # Populates self.cur_pos with the latest position
+            
+            if(self.sim_enabled):
+                self.cur_pos.point.x = 0
+                self.cur_pos.point.y = 0
+                self.cur_pos.point.z = 0
+            
+            pos_reached = self.pointReached2D(self.cur_pos, goal_point_pointer_link, self.min_dist_to_transition)
 
             if pos_reached:
+                self.cur_point_world = goal_point_world
                 cur_ind += 1
                 print("Moving to point number " + str(cur_ind + 1))
             
-            if cur_ind >= len(self.points_list_ros):
+            if cur_ind >= len(self.points_list):
                 print("Point list complete, going home")
                 self.goHome()
                 self.onShutDown()
@@ -176,38 +212,43 @@ class PointsManagerNode():
         spam_time = 1
         spam_freq = 10 # Hz
         while (time.time() - start_time) < spam_time:  # Loop for 3 seconds
-            self.enable_stepper(True)
+            self.enable_disable_stepper(True) # ENable steppers
+            self.enable_disable_pen(False) # Disable pen
             time.sleep(1/spam_freq)  # Sleep for 1 second
 
     def goHome(self):
         start_time = time.time()
         spam_time = 1
-        spam_freq = 10 # Hz
+        spam_freq = 5 # Hz
 
         # WARNING, bad code with magic numbers
         while (time.time() - start_time) < spam_time:
-            self.marker_set_pos_publisher.publish(self.home_point)
+            self.marker_set_pos_publisher.publish(self.home_point.point_stamped_msg)
+            self.enable_disable_pen(False) # Disable pen
             time.sleep(1/spam_freq)  # Sleep for 1 second
 
     def onShutDown(self):
-        time.sleep(7) # Wait for 7 seconds
+        time.sleep(3) # Wait for 3 seconds
         start_time = time.time()
         spam_time = 1
-        spam_freq = 10 # Hz
+        spam_freq = 5 # Hz
 
         print("Disabling steppers from pi")
         while (time.time() - start_time) < spam_time:
-            self.enable_stepper(False)
+            self.enable_disable_stepper(False)
+            self.enable_disable_pen(False) # Disable pen
             time.sleep(1/spam_freq)  # Sleep for 1 second
 
         time.sleep(7) #TODO REMOVE
 
-    def pointReached2D(self, cur_pos, goal_pos, point_threshold):
+    def pointReached2D(self, cur_pos, goal_point, point_threshold):
 
-        x_diff = cur_pos.point.x - goal_pos.point.x
-        y_diff = cur_pos.point.y - goal_pos.point.y
+        x_diff = cur_pos.point.x - goal_point.x
+        y_diff = cur_pos.point.y - goal_point.y
 
-        if(math.sqrt(x_diff**2 + y_diff**2) <= point_threshold):
+        dist = math.sqrt(x_diff**2 + y_diff**2)
+        
+        if(dist <= point_threshold):
             return True
         else:
             return False
