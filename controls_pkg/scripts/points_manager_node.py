@@ -112,7 +112,7 @@ class PointsManagerNode():
     def enable_disable_pen(self, val):
 
         self.enable_pen_msg.data = val
-        self.stepper_enable_disable_publisher.publish(self.enable_pen_msg)
+        self.pen_enable_disable_publisher.publish(self.enable_pen_msg)
         
 
     def interpolate_points(self, point1, point2, num_intermediate_points):
@@ -144,8 +144,8 @@ class PointsManagerNode():
 
     def run(self):
 
-        cur_ind = 0
-        self.cur_point_world = self.points_list[cur_ind]
+        self.cur_point_world = self.points_list[0]
+        cur_ind = 1
         
         while not rospy.is_shutdown():
             
