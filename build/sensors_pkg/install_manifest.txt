@@ -1,5 +1,0 @@
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/sensors_pkg/lib/pkgconfig/sensors_pkg.pc
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/sensors_pkg/share/sensors_pkg/cmake/sensors_pkgConfig.cmake
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/sensors_pkg/share/sensors_pkg/cmake/sensors_pkgConfig-version.cmake
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/sensors_pkg/share/sensors_pkg/package.xml
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/sensors_pkg/lib/sensors_pkg/imu_publisher.py

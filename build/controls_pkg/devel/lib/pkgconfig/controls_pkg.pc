@@ -1,8 +1,0 @@
-prefix=/home/aadi/Documents/Koho_all/src/laser_cart_core/build/controls_pkg/devel
-
-Name: controls_pkg
-Description: Description of controls_pkg
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

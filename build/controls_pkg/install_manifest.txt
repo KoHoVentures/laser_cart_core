@@ -1,9 +1,0 @@
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/pkgconfig/controls_pkg.pc
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/cmake/controls_pkgConfig.cmake
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/cmake/controls_pkgConfig-version.cmake
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/package.xml
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/tf_testing.py
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/auto_command_position_node.py
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/points_manager_node.py
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/lib/controls_pkg/dummy_encoder_node.py
-/home/aadi/Documents/Koho_all/src/laser_cart_core/install/controls_pkg/share/controls_pkg/launch/test_launch.launch

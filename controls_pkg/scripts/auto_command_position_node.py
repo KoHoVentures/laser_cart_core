@@ -5,7 +5,7 @@ from geometry_msgs.msg import Point, PointStamped
 from std_msgs.msg import Header
 from std_msgs.msg import Bool
 
-def input_handler():
+def input_handler_points():
     input_str = input("Enter x y z coordinates separated by spaces: ")
     coords = input_str.split()
     if len(coords) != 3:
@@ -26,6 +26,13 @@ def input_handler():
         rospy.logwarn("Invalid input format. Please enter valid numerical values for x y z coordinates.")
         return None
 
+def input_handler_pen():
+    input_str = input("Enter 0 to disable pen, 1 to enable pen: ")
+    if input_str == "1":
+        return True
+    else:
+        return False
+
 def main():
     rospy.init_node('auto_command_position_node', anonymous=True)
     rate = rospy.Rate(10)  # 10hz
@@ -37,13 +44,16 @@ def main():
     marker_set_pos_publisher = rospy.Publisher('marker_position_topic', PointStamped, queue_size=10)
     marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
     stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
+    pen_enable_disable_publisher = rospy.Publisher('pen_enable_disable_topic', Bool, queue_size=10)
+
 
     enable_stepper_msg = Bool()
     enable_stepper_msg.data = enable_stepper
 
+    enable_pen_msg = Bool()
+
     tst_msg = Bool()
     tst_msg.data = False
-
 
     # Create subscriber
     stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, curPosCallback)
@@ -54,10 +64,13 @@ def main():
         # Enable stepper
         stepper_enable_disable_publisher.publish(enable_stepper_msg)
 
-        point = input_handler()
+        point = input_handler_points()
         if point:
             marker_set_pos_publisher.publish(point)
             marker_get_pos_publisher.publish(tst_msg)
+        
+        enable_pen_msg.data = input_handler_pen()
+        pen_enable_disable_publisher.publish(enable_pen_msg)
             
         rate.sleep()
 

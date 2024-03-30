@@ -4,8 +4,7 @@ import rospy
 import tf2_ros
 
 import tf.transformations as tf_trans
-from tf2_geometry_msgs import PointStamped
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, PointStamped
 from std_msgs.msg import Bool, Header, Int64MultiArray
 
 import time
