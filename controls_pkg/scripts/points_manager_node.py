@@ -68,8 +68,8 @@ class PointsManagerNode():
         self.points_list.insert(0, Point(point_xyz = [0.0, 0.0, 0.0], frame = "world", move_type=self.points_list[0].move_type - 1)) # Append home at the start
         
         
-        self.home_point = Point([0.0, 0.0, 0.0], "world", self.points_list[-1].move_type + 1)
-        
+        self.home_point = Point([0.0, 0.0, 0.0], "pointer_link", self.points_list[-1].move_type + 1)
+        self.points_list.append(self.home_point)
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
 
         self.rate = rospy.Rate(10)  # 10hz
@@ -96,6 +96,7 @@ class PointsManagerNode():
         self.cur_pos = PointStamped()
 
         self.first_update_tf = True
+        self.pen_pos_changed = False
         
         # Other initializations
         self.prev_theta_l = 0.0
@@ -152,26 +153,36 @@ class PointsManagerNode():
             
             if(self.cur_point_world.move_type == goal_point_world.move_type):
                 self.enable_disable_pen(True) # Enable pen if move types match
+                if(not self.pen_pos_changed):
+                    self.pen_pos_changed = True
+                    time.sleep(1.0)
             else:
                 self.enable_disable_pen(False) # Disable pen if move types dont match
+                self.pen_pos_changed = False
+                
             
             try: 
-                tf_cur = self.tf_buffer.lookup_transform("world", "pointer_link", rospy.Time())
-                
-                tf_homogen = self.quaternion_translation_to_homogeneous(np.array([tf_cur.transform.rotation.x,
-                                                                                  tf_cur.transform.rotation.y,
-                                                                                  tf_cur.transform.rotation.z,
-                                                                                  tf_cur.transform.rotation.w]),
-                                                                        np.array([tf_cur.transform.translation.x,
-                                                                                  tf_cur.transform.translation.y,
-                                                                                  tf_cur.transform.translation.z]))
-                tf_homogen = np.linalg.inv(tf_homogen)
-                
+                if(goal_point_world.point_stamped_msg.header.frame_id == "pointer_link"): 
+                    tf_homogen = np.eye(4)
+                else:    
+                    tf_cur = self.tf_buffer.lookup_transform("world", "pointer_link", rospy.Time())
+                    
+                    tf_homogen = self.quaternion_translation_to_homogeneous(np.array([tf_cur.transform.rotation.x,
+                                                                                    tf_cur.transform.rotation.y,
+                                                                                    tf_cur.transform.rotation.z,
+                                                                                    tf_cur.transform.rotation.w]),
+                                                                            np.array([tf_cur.transform.translation.x,
+                                                                                    tf_cur.transform.translation.y,
+                                                                                    tf_cur.transform.translation.z]))
+                    tf_homogen = np.linalg.inv(tf_homogen)
+
                 goal_transformed = np.matmul(tf_homogen, np.array([goal_point_world.x,
-                                               goal_point_world.y,
-                                               goal_point_world.z,
-                                               1]))
+                                            goal_point_world.y,
+                                            goal_point_world.z,
+                                            1]))
                 goal_point_pointer_link = Point(goal_transformed[:3], "pointer_link", goal_point_world.move_type)
+
+                print("Moving to: "+str(goal_transformed[:3])+" "+str([self.cur_pos.point.x, self.cur_pos.point.y, self.cur_pos.point.z]))
                 
             except tf2_ros.TransformException as ex:
                 rospy.logerr("Failed to transform point: %s", ex)
@@ -181,10 +192,10 @@ class PointsManagerNode():
 
             self.marker_get_pos_publisher.publish(self.get_pos_msg) # Populates self.cur_pos with the latest position
             
-            if(self.sim_enabled):
-                self.cur_pos.point.x = 0
-                self.cur_pos.point.y = 0
-                self.cur_pos.point.z = 0
+            # if(self.sim_enabled):
+            #     self.cur_pos.point.x = 0
+            #     self.cur_pos.point.y = 0
+            #     self.cur_pos.point.z = 0
             
             pos_reached = self.pointReached2D(self.cur_pos, goal_point_pointer_link, self.min_dist_to_transition)
 
@@ -195,8 +206,8 @@ class PointsManagerNode():
             
             if cur_ind >= len(self.points_list):
                 print("Point list complete, going home")
-                self.goHome()
-                self.onShutDown()
+                # self.goHome()
+                #self.onShutDown()
 
                 print("Killing node")
                 return
@@ -215,30 +226,30 @@ class PointsManagerNode():
             self.enable_disable_pen(False) # Disable pen
             time.sleep(1/spam_freq)  # Sleep for 1 second
 
-    def goHome(self):
-        start_time = time.time()
-        spam_time = 1
-        spam_freq = 5 # Hz
+    # def goHome(self):
+    #     start_time = time.time()
+    #     spam_time = 10
+    #     spam_freq = 5 # Hz
 
-        # WARNING, bad code with magic numbers
-        while (time.time() - start_time) < spam_time:
-            self.marker_set_pos_publisher.publish(self.home_point.point_stamped_msg)
-            self.enable_disable_pen(False) # Disable pen
-            time.sleep(1/spam_freq)  # Sleep for 1 second
+    #     # WARNING, bad code with magic numbers
+    #     while (time.time() - start_time) < spam_time:
+    #         self.marker_set_pos_publisher.publish(self.home_point.point_stamped_msg)
+    #         self.enable_disable_pen(False) # Disable pen
+    #         time.sleep(1/spam_freq)  # Sleep for 1 second
 
-    def onShutDown(self):
-        time.sleep(3) # Wait for 3 seconds
-        start_time = time.time()
-        spam_time = 1
-        spam_freq = 5 # Hz
+    # def onShutDown(self):
+    #     time.sleep(3) # Wait for 3 seconds
+    #     start_time = time.time()
+    #     spam_time = 1
+    #     spam_freq = 5 # Hz
 
-        print("Disabling steppers from pi")
-        while (time.time() - start_time) < spam_time:
-            self.enable_disable_stepper(False)
-            self.enable_disable_pen(False) # Disable pen
-            time.sleep(1/spam_freq)  # Sleep for 1 second
+    #     print("Disabling steppers from pi")
+    #     while (time.time() - start_time) < spam_time:
+    #         self.enable_disable_stepper(False)
+    #         self.enable_disable_pen(False) # Disable pen
+    #         time.sleep(1/spam_freq)  # Sleep for 1 second
 
-        time.sleep(7) #TODO REMOVE
+    #     time.sleep(7) #TODO REMOVE
 
     def pointReached2D(self, cur_pos, goal_point, point_threshold):
 
@@ -281,7 +292,7 @@ class PointsManagerNode():
         y = ((Asteps - Bsteps) / (2 * self.steps_per_mm)) / 1000.0
         z = 0.0 # TODO
 
-        #print("Current position (in m): "+str(x) + " " + str(y) + " " + str(z))
+        print("Current position (in m): "+str(x) + " " + str(y) + " " + str(z))
 
         self.cur_pos.header = msg.header
         self.cur_pos.point.x = x
@@ -415,6 +426,6 @@ if __name__ == '__main__':
         node.run()
     except rospy.ROSInterruptException:
         pass
-    # finally:
-    #     print("Dsiabling steppers")
-    #     node.onShutDown()
+    finally:
+        print("Disabling steppers")
+        # node.onShutDown()
