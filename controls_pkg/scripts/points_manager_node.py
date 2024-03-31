@@ -68,7 +68,7 @@ class PointsManagerNode():
         self.points_list.insert(0, Point(point_xyz = [0.0, 0.0, 0.0], frame = "world", move_type=self.points_list[0].move_type - 1)) # Append home at the start
         
         
-        self.home_point = Point([0.0, 0.0, 0.0], "pointer_link", self.points_list[-1].move_type + 1)
+        self.home_point = Point([0.01, 0.01, 0.0], "pointer_link", self.points_list[-1].move_type + 1)
         self.points_list.append(self.home_point)
 
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
@@ -183,8 +183,8 @@ class PointsManagerNode():
                                             1]))
                 goal_point_pointer_link = Point(goal_transformed[:3], "pointer_link", goal_point_world.move_type)
 
-                print("Moving to: "+str(goal_transformed[:3])+" "+str([self.cur_pos.point.x, self.cur_pos.point.y, self.cur_pos.point.z]))
-                
+                # print("Moving to: "+str(goal_transformed[:3])+" "+str([self.cur_pos.point.x, self.cur_pos.point.y, self.cur_pos.point.z]))
+
             except tf2_ros.TransformException as ex:
                 rospy.logerr("Failed to transform point: %s", ex)
                 continue
@@ -269,8 +269,6 @@ class PointsManagerNode():
         x = ((Asteps + Bsteps) / (2 * self.steps_per_mm)) / 1000.0
         y = ((Asteps - Bsteps) / (2 * self.steps_per_mm)) / 1000.0
         z = 0.0 # TODO
-
-        print("Current position (in m): "+str(x) + " " + str(y) + " " + str(z))
 
         self.cur_pos.header = msg.header
         self.cur_pos.point.x = x
