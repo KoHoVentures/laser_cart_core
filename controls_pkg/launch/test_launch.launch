@@ -35,8 +35,8 @@
     <param name="frame_base_length" type="double" value="$(arg frame_base_length_arg)"/>
     <param name="ticks_per_revolution" type="int" value="$(arg ticks_per_revolution_arg)"/>
   </node>
-
-  <!-- <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
+<!-- 
+  <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
     <param name="enable_stepper" type="bool" value="true"/>
   </node> -->
 

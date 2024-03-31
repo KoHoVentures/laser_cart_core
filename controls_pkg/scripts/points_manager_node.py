@@ -70,6 +70,7 @@ class PointsManagerNode():
         
         self.home_point = Point([0.0, 0.0, 0.0], "pointer_link", self.points_list[-1].move_type + 1)
         self.points_list.append(self.home_point)
+
         # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
 
         self.rate = rospy.Rate(10)  # 10hz
@@ -226,28 +227,6 @@ class PointsManagerNode():
             self.enable_disable_pen(False) # Disable pen
             time.sleep(1/spam_freq)  # Sleep for 1 second
 
-    # def goHome(self):
-    #     start_time = time.time()
-    #     spam_time = 10
-    #     spam_freq = 5 # Hz
-
-    #     # WARNING, bad code with magic numbers
-    #     while (time.time() - start_time) < spam_time:
-    #         self.marker_set_pos_publisher.publish(self.home_point.point_stamped_msg)
-    #         self.enable_disable_pen(False) # Disable pen
-    #         time.sleep(1/spam_freq)  # Sleep for 1 second
-
-    # def onShutDown(self):
-    #     time.sleep(3) # Wait for 3 seconds
-    #     start_time = time.time()
-    #     spam_time = 1
-    #     spam_freq = 5 # Hz
-
-    #     print("Disabling steppers from pi")
-    #     while (time.time() - start_time) < spam_time:
-    #         self.enable_disable_stepper(False)
-    #         self.enable_disable_pen(False) # Disable pen
-    #         time.sleep(1/spam_freq)  # Sleep for 1 second
 
     #     time.sleep(7) #TODO REMOVE
 
@@ -281,7 +260,6 @@ class PointsManagerNode():
         transform.transform.rotation.w = 1.0
 
         return transform
-        # self.transform_broadcaster.sendTransform(transform)
 
     def curPosCallback(self, msg):
 
@@ -300,7 +278,6 @@ class PointsManagerNode():
         self.cur_pos.point.z = z
 
     def encoderCallback(self, msg):
-        # Define your callback function
         #print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
 
         delta_theta_l = msg.point.x - self.prev_theta_l # hacky, should have been erray but debug taking too long
@@ -426,6 +403,3 @@ if __name__ == '__main__':
         node.run()
     except rospy.ROSInterruptException:
         pass
-    finally:
-        print("Disabling steppers")
-        # node.onShutDown()
