@@ -6,11 +6,14 @@
   <arg name="steps_per_mm_arg" default="80"/>
   <arg name="wheel_radius_arg" default="0.0508"/>
   <arg name="frame_base_length_arg" default="0.5969"/>
-  <arg name="points_threshold_arg" default="0.005"/>
+  <arg name="points_threshold_arg" default="0.01"/>
   <arg name="ticks_per_revolution_arg" default="4000"/>
   <arg name="points_csv_filename_arg" default="$(find controls_pkg)/csv_files/test_points.csv"/>
 
   <arg name="sim_arg" default="false"/>
+  <arg name="interpolation_enabled_arg" default="false"/>
+  <arg name="pen_wait_duration_arg" default="1.25"/>
+  
 
   <!-- Static transform -->
   <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_static_broadcaster" args="0.152 0.152 0 -0.7071068 0.7071068 0 0 base_link pointer_link" />
@@ -51,6 +54,8 @@
     <param name="ticks_per_revolution" type="int" value="$(arg ticks_per_revolution_arg)"/>
     <param name="points_file_name" type="string" value="$(arg points_csv_filename_arg)"/>
     <param name="sim_enabled" type="bool" value="$(arg sim_arg)"/>
+    <param name="interpolation_enabled" type="bool" value="$(arg interpolation_enabled_arg)"/>
+    <param name="pen_wait_duration" type="double" value="$(arg pen_wait_duration_arg)"/>
   </node>
 
 </launch>

@@ -30,7 +30,9 @@ class Point:
         self.point_stamped_msg.point.z = float(point_xyz[2])
 
         self.move_type = move_type
-
+    
+    def __repr__(self):
+        return f"Point object with value {self.x}, {self.y}, {self.z}, {self.point_stamped_msg.header.frame_id}, {self.move_type} \n"
 class PointsManagerNode():
     def __init__(self):
         
@@ -46,12 +48,15 @@ class PointsManagerNode():
         self.ticks_per_revolution = int(rospy.get_param('~ticks_per_revolution')) # Width of the robot base (distance between wheels)
         filename = rospy.get_param('~points_file_name')
         self.sim_enabled = rospy.get_param('~sim_enabled')
+        self.interpolation_enabled = rospy.get_param('~interpolation_enabled')
+        self.pen_wait_duration = float(rospy.get_param('~pen_wait_duration'))
         
         self.tf_buffer = tf2_ros.Buffer()
         self.transform_broadcaster = tf2_ros.TransformBroadcaster()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.points_list = []
+        # Extract points from csv
         with open(filename, 'r') as file:
             # Create a CSV reader object
             csv_reader = csv.DictReader(file)
@@ -62,17 +67,19 @@ class PointsManagerNode():
                 move = int(row['Move'])
                 self.points_list.append(Point(new_point, frame="world", move_type=int(row['Move'])))
         
-        # self.points_list = [Point(point_xyz = [0.01, 0.15, 0.0], frame="world", move_type=0),
-        #                     Point(point_xyz = [0.9, 0.9, 0.0], frame = "world", move_type=1)] # in m
+        # Interpolation
+        if(self.interpolation_enabled):
+            self.points_list = self.populate_points_fixed_threshold(self.points_list, self.points_threshold)
         
+        # Append home point at start for different move type
         self.points_list.insert(0, Point(point_xyz = [0.0, 0.0, 0.0], frame = "world", move_type=self.points_list[0].move_type - 1)) # Append home at the start
         
-        
+        # Append home point at end
         self.home_point = Point([0.01, 0.01, 0.0], "pointer_link", self.points_list[-1].move_type + 1)
         self.points_list.append(self.home_point)
-
-        # points_list = self.populate_points_fixed_threshold(points_list, self.points_threshold)
-
+        
+        print(self.points_list)
+        
         self.rate = rospy.Rate(10)  # 10hz
 
         # Create publishers
@@ -80,7 +87,7 @@ class PointsManagerNode():
         self.marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
         self.stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
         self.pen_enable_disable_publisher = rospy.Publisher('pen_enable_disable_topic', Bool, queue_size=10)
-
+        
         # Create subscriber
         stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
         encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
@@ -98,6 +105,7 @@ class PointsManagerNode():
 
         self.first_update_tf = True
         self.pen_pos_changed = False
+        self.encoders_enabled = False
         
         # Other initializations
         self.prev_theta_l = 0.0
@@ -120,11 +128,14 @@ class PointsManagerNode():
         interpolated_points = []
         for i in range(1, num_intermediate_points + 1):
             alpha = i / (num_intermediate_points + 1)
-            interpolated_point = [
-                point1[0] * (1 - alpha) + point2[0] * alpha,
-                point1[1] * (1 - alpha) + point2[1] * alpha,
-                point1[2] * (1 - alpha) + point2[2] * alpha
+            interpolated_point_xyz = [
+                point1.x * (1 - alpha) + point2.x * alpha,
+                point1.y * (1 - alpha) + point2.y * alpha,
+                point1.z * (1 - alpha) + point2.z * alpha
             ]
+            
+            interpolated_point = Point(interpolated_point_xyz, frame = "world", move_type=point1.move_type)
+            
             interpolated_points.append(interpolated_point)
         return interpolated_points
 
@@ -134,7 +145,7 @@ class PointsManagerNode():
             point1 = points_list[i]
             new_points.append(point1)  # Include original point
             point2 = points_list[i + 1]
-            distance = max(abs(point2[0] - point1[0]), abs(point2[1] - point1[1]), abs(point2[2] - point1[2]))
+            distance = max(abs(point2.x - point1.x), abs(point2.y - point1.y), abs(point2.z - point1.z))
             num_intermediate_points = int(distance / threshold)
             if num_intermediate_points > 0:
                 intermediate_points = self.interpolate_points(point1, point2, num_intermediate_points)
@@ -156,7 +167,7 @@ class PointsManagerNode():
                 self.enable_disable_pen(True) # Enable pen if move types match
                 if(not self.pen_pos_changed):
                     self.pen_pos_changed = True
-                    time.sleep(1.0)
+                    time.sleep(self.pen_wait_duration)
             else:
                 self.enable_disable_pen(False) # Disable pen if move types dont match
                 self.pen_pos_changed = False
@@ -186,7 +197,10 @@ class PointsManagerNode():
                 # print("Moving to: "+str(goal_transformed[:3])+" "+str([self.cur_pos.point.x, self.cur_pos.point.y, self.cur_pos.point.z]))
 
             except tf2_ros.TransformException as ex:
-                rospy.logerr("Failed to transform point: %s", ex)
+                if(self.encoders_enabled):
+                    rospy.logerr("Failed to transform point: %s", ex)
+                else:
+                    rospy.logerr("Encoders not enabled yet")
                 continue
             
             self.marker_set_pos_publisher.publish(goal_point_pointer_link.point_stamped_msg) # TODO: publishes move at node freq so might wanna change this
@@ -359,6 +373,9 @@ class PointsManagerNode():
             
             # Publish the updated transform
             self.transform_broadcaster.sendTransform(tf_transformed)
+            
+            self.encoders_enabled = True
+            
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             print("Failed to update transform: %s", str(e))
     
