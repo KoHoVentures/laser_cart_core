@@ -1,7 +1,6 @@
 <launch>
-  <arg name="node_start_delay" default="2.0" />  
-
   <!-- Define arguments -->
+  <arg name="node_start_delay" default="4.0" />  
   <arg name="min_dist_to_transition_arg" default="0.003"/>
   <arg name="steps_per_mm_arg" default="80"/>
   <arg name="wheel_radius_arg" default="0.0508"/>
@@ -10,22 +9,24 @@
   <arg name="ticks_per_revolution_arg" default="4000"/>
   <arg name="points_csv_filename_arg" default="$(find controls_pkg)/csv_files/test_points.csv"/>
 
-  <arg name="sim_arg" default="false"/>
-  <arg name="interpolation_enabled_arg" default="false"/>
+  <arg name="sim_arg" default="true"/>
+  <arg name="interpolation_enabled_arg" default="true"/>
   <arg name="pen_wait_duration_arg" default="1.25"/>
+  <arg name="node_freq_arg" default="25" />
   
 
-  <!-- Static transform -->
+  <!-- Static transform between base_link and pointer link-->
   <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_static_broadcaster" args="0.152 0.152 0 -0.7071068 0.7071068 0 0 base_link pointer_link" />
 
-  <!-- Run serial_node.py in a new terminal -->
+  <!-- Rosserial node -->
   <node pkg="rosserial_python" type="serial_node.py" name="serial_node" unless="$(arg sim_arg)" output="screen">
     <param name="port" value="/dev/ttyACM0"/> <!-- Update port value as needed -->
     <param name="baud" value="115200"/> <!-- Set the baud rate -->
   </node>
 
   <!-- RVIZ -->
-  <node name="rviz" pkg="rviz" type="rviz" if="$(arg sim_arg)" args="-d $(find controls_pkg)/rviz/sim.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find controls_pkg)/rviz/sim.rviz"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@'"/>
+  
   <!-- Sim encoder node -->
   <node pkg="controls_pkg" type="dummy_encoder_node.py" if="$(arg sim_arg)" name="dummy_encoder_node" output="screen" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
     <param name="node_freq" type="int" value="10"/>
@@ -38,12 +39,13 @@
     <param name="frame_base_length" type="double" value="$(arg frame_base_length_arg)"/>
     <param name="ticks_per_revolution" type="int" value="$(arg ticks_per_revolution_arg)"/>
   </node>
-<!-- 
-  <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
+
+  <!-- Node to test manual commanding of positions -->
+  <!-- <node pkg="controls_pkg" type="auto_command_position_node.py" name="auto_command_position_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
     <param name="enable_stepper" type="bool" value="true"/>
   </node> -->
 
-  <!-- <node pkg="controls_pkg" type="tf_testing.py" name="tf_testing_node" output="screen"/> -->
+  <!-- Main node that manages all points and tfs -->
 
   <node pkg="controls_pkg" type="points_manager_node.py" name="points_manager_node" output="screen"  launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' ">
     <param name="min_dist_to_transition" type="double" value="$(arg min_dist_to_transition_arg)"/>
@@ -56,6 +58,7 @@
     <param name="sim_enabled" type="bool" value="$(arg sim_arg)"/>
     <param name="interpolation_enabled" type="bool" value="$(arg interpolation_enabled_arg)"/>
     <param name="pen_wait_duration" type="double" value="$(arg pen_wait_duration_arg)"/>
+    <param name="node_freq" type="int" value="$(arg node_freq_arg)"/>
   </node>
 
 </launch>

@@ -36,6 +36,7 @@ class Point:
 class PointsManagerNode():
     def __init__(self):
         
+        # Initilaize ros ndoe
         rospy.init_node('points_manager_node', anonymous=True)
 
         # ROS params
@@ -50,7 +51,9 @@ class PointsManagerNode():
         self.sim_enabled = rospy.get_param('~sim_enabled')
         self.interpolation_enabled = rospy.get_param('~interpolation_enabled')
         self.pen_wait_duration = float(rospy.get_param('~pen_wait_duration'))
+        self.node_freq = int(rospy.get_param('~node_freq'))
         
+        # ROS tfs
         self.tf_buffer = tf2_ros.Buffer()
         self.transform_broadcaster = tf2_ros.TransformBroadcaster()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -71,35 +74,35 @@ class PointsManagerNode():
         if(self.interpolation_enabled):
             self.points_list = self.populate_points_fixed_threshold(self.points_list, self.points_threshold)
         
-        # Append home point at start for different move type
-        self.points_list.insert(0, Point(point_xyz = [0.0, 0.0, 0.0], frame = "world", move_type=self.points_list[0].move_type - 1)) # Append home at the start
+        # Append home point at start for a different move type
+        self.points_list.insert(0, Point(point_xyz = [0.01, 0.01, 0.0], frame = "world", move_type=self.points_list[0].move_type - 1)) # Append home at the start
         
         # Append home point at end
         self.home_point = Point([0.01, 0.01, 0.0], "pointer_link", self.points_list[-1].move_type + 1)
         self.points_list.append(self.home_point)
         
-        print(self.points_list)
         
-        self.rate = rospy.Rate(10)  # 10hz
+        self.rate = rospy.Rate(self.node_freq)  # 10hz
 
-        # Create publishers
+        # ROS publishers
         self.marker_set_pos_publisher = rospy.Publisher('marker_position_topic', PointStamped, queue_size=10)
         self.marker_get_pos_publisher = rospy.Publisher('get_marker_cur_pos', Bool, queue_size=10)
         self.stepper_enable_disable_publisher = rospy.Publisher('stepper_enable_disable_topic', Bool, queue_size=10)
         self.pen_enable_disable_publisher = rospy.Publisher('pen_enable_disable_topic', Bool, queue_size=10)
         
-        # Create subscriber
+        # ROS subscriber
         stepper_state_subscriber = rospy.Subscriber('cur_pos', PointStamped, self.curPosCallback)
         encoder_state_subscriber = rospy.Subscriber('wheels_rad_topic', PointStamped, self.encoderCallback)
 
+        # Initialization
 
         self.get_pos_msg = Bool()
         self.enable_stepper_msg = Bool()
         self.enable_pen_msg = Bool()
     
         self.get_pos_msg.data = True
-        self.enable_stepper_msg.data = True # Probably not needed
-        self.enable_pen_msg.data = True # Probably not needed
+        self.enable_stepper_msg.data = True
+        self.enable_pen_msg.data = True
 
         self.cur_pos = PointStamped()
 
@@ -107,24 +110,42 @@ class PointsManagerNode():
         self.pen_pos_changed = False
         self.encoders_enabled = False
         
-        # Other initializations
         self.prev_theta_l = 0.0
         self.prev_theta_r = 0.0
         
         self.onStartup()
-
+        
+        
     def enable_disable_stepper(self, val):
+        """ Enable or disable steppers
 
+        Args:
+            val (bool): true enables steppers, false disables them
+        """
         self.enable_stepper_msg.data = val
         self.stepper_enable_disable_publisher.publish(self.enable_stepper_msg)
     
     def enable_disable_pen(self, val):
+        """Enable or disable pen
 
+        Args:
+            val (bool): true enables pens, false disables it
+        """
         self.enable_pen_msg.data = val
         self.pen_enable_disable_publisher.publish(self.enable_pen_msg)
         
 
     def interpolate_points(self, point1, point2, num_intermediate_points):
+        """_summary_
+
+        Args:
+            point1 (Point): point1
+            point2 (Point): point2
+            num_intermediate_points (int): number of intermediate points
+
+        Returns:
+            interpolated_points: list of interpolated Points
+        """
         interpolated_points = []
         for i in range(1, num_intermediate_points + 1):
             alpha = i / (num_intermediate_points + 1)
@@ -155,7 +176,10 @@ class PointsManagerNode():
     
 
     def run(self):
-
+        """
+        Node run function
+        """
+        
         self.cur_point_world = self.points_list[0]
         cur_ind = 1
         
@@ -163,8 +187,9 @@ class PointsManagerNode():
             
             goal_point_world = self.points_list[cur_ind]
             
+            # Enable pen if move type matches
             if(self.cur_point_world.move_type == goal_point_world.move_type):
-                self.enable_disable_pen(True) # Enable pen if move types match
+                self.enable_disable_pen(True)
                 if(not self.pen_pos_changed):
                     self.pen_pos_changed = True
                     time.sleep(self.pen_wait_duration)
@@ -172,7 +197,7 @@ class PointsManagerNode():
                 self.enable_disable_pen(False) # Disable pen if move types dont match
                 self.pen_pos_changed = False
                 
-            
+            # Transform points to pointer link
             try: 
                 if(goal_point_world.point_stamped_msg.header.frame_id == "pointer_link"): 
                     tf_homogen = np.eye(4)
@@ -194,9 +219,8 @@ class PointsManagerNode():
                                             1]))
                 goal_point_pointer_link = Point(goal_transformed[:3], "pointer_link", goal_point_world.move_type)
 
-                # print("Moving to: "+str(goal_transformed[:3])+" "+str([self.cur_pos.point.x, self.cur_pos.point.y, self.cur_pos.point.z]))
-
             except tf2_ros.TransformException as ex:
+                
                 if(self.encoders_enabled):
                     rospy.logerr("Failed to transform point: %s", ex)
                 else:
@@ -207,11 +231,13 @@ class PointsManagerNode():
 
             self.marker_get_pos_publisher.publish(self.get_pos_msg) # Populates self.cur_pos with the latest position
             
-            # if(self.sim_enabled):
-            #     self.cur_pos.point.x = 0
-            #     self.cur_pos.point.y = 0
-            #     self.cur_pos.point.z = 0
+            # Resey cur pos only (only for sim)
+            if(self.sim_enabled):
+                self.cur_pos.point.x = 0
+                self.cur_pos.point.y = 0
+                self.cur_pos.point.z = 0
             
+            # Check if pos was reached
             pos_reached = self.pointReached2D(self.cur_pos, goal_point_pointer_link, self.min_dist_to_transition)
 
             if pos_reached:
@@ -232,6 +258,9 @@ class PointsManagerNode():
         # Node done running
 
     def onStartup(self):
+        """Enable steppers and disable pen on startup - hacky implementation since ROS serial drops sometimes on startup
+        """
+        
         print("Enabling steppers from pi")
         start_time = time.time()
         spam_time = 1
@@ -240,9 +269,6 @@ class PointsManagerNode():
             self.enable_disable_stepper(True) # ENable steppers
             self.enable_disable_pen(False) # Disable pen
             time.sleep(1/spam_freq)  # Sleep for 1 second
-
-
-    #     time.sleep(7) #TODO REMOVE
 
     def pointReached2D(self, cur_pos, goal_point, point_threshold):
 
@@ -257,8 +283,13 @@ class PointsManagerNode():
             return False
 
     def getInitialTf(self):
-        target_frame = "world"  # Update this with your target frame
-        source_frame = "base_link"  # Update this with your source frame
+        """
+        get initila tf ro be defined between world and base link
+        Returns:
+            transform: initial tf between world and base link
+        """
+        target_frame = "world"
+        source_frame = "base_link"
 
         # Initialize the initial transform (e.g., at the start they are assumed to be the same)
         transform = TransformStamped()
@@ -276,7 +307,12 @@ class PointsManagerNode():
         return transform
 
     def curPosCallback(self, msg):
+        """
+        ROS call back to store current position from encoder step values
 
+        Args:
+            msg (_type_): _description_
+        """
         Asteps = msg.point.x
         Bsteps = msg.point.y
 
@@ -290,10 +326,10 @@ class PointsManagerNode():
         self.cur_pos.point.z = z
 
     def encoderCallback(self, msg):
-        #print("Encoder received, left: "+str(msg.point.x) + ", right: "+str(msg.point.y))
-
-        delta_theta_l = msg.point.x - self.prev_theta_l # hacky, should have been erray but debug taking too long
-        delta_theta_r = msg.point.y - self.prev_theta_r# hacky, should have been erray but debug taking too long
+        # Encoder call back
+        
+        delta_theta_l = msg.point.x - self.prev_theta_l
+        delta_theta_r = msg.point.y - self.prev_theta_r
         
         self.prev_theta_l = msg.point.x
         self.prev_theta_r = msg.point.y
@@ -306,18 +342,22 @@ class PointsManagerNode():
         delta_theta_l = delta_theta_l * 2 * math.pi / self.ticks_per_revolution
         delta_theta_r = delta_theta_r * 2 * math.pi / self.ticks_per_revolution
         
-        # print("Theta l: "+str(delta_theta_l)+" | Theta r: "+str(delta_theta_r))
-            
         delta_s = (self.wheel_radius / 2) * (delta_theta_r + delta_theta_l)
         delta_theta = (self.wheel_radius / self.frame_base_length) * (delta_theta_r - delta_theta_l)
 
-        # print("Delta s: "+str(delta_s)+" | Delta theta: "+str(delta_theta))
-        
+        # Update tf of base_link
         self.updateTf(delta_s, delta_theta)
 
     def updateTf(self, delta_s = 0.1, delta_theta = np.pi / 8):
-        
+        """
+        Forward kinematics to update tf from baselink to world
+
+        Args:
+            delta_s (float, optional): delta x in robot frame. Defaults to 0.1.
+            delta_theta (float, optional): delta theta in robot frame. Defaults to np.pi/8.
+        """
         if(self.first_update_tf):
+            # First tf if nothing was published before
             self.first_update_tf = False
             transform = self.getInitialTf()
             self.transform_broadcaster.sendTransform(transform)
