@@ -33,7 +33,8 @@ class Point:
     
     def __repr__(self):
         return f"Point object with value {self.x}, {self.y}, {self.z}, {self.point_stamped_msg.header.frame_id}, {self.move_type} \n"
-class PointsManagerNode():
+        
+class PointsManagerNode:
     def __init__(self):
         
         # Initilaize ros ndoe
