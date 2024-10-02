@@ -1,2 +1,2 @@
 # laser_cart_core
-Test edit readme
+Laser cart code to plot accurate layouts using a movable cart
